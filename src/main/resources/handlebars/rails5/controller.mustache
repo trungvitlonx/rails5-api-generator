@@ -1,0 +1,19 @@
+{{>_header}}
+
+class {{classname}}Controller < ApplicationController
+{{#operations}}
+{{#operation}}
+{{#contents}}
+  def {{nickname}}
+    {{#parameters}}
+    param! {{paramName}}, {{dataType}}
+    {{/parameters}}
+    serv = {{classname}}Service.new
+    resp = serv.{{nickname}}
+    render json: resp
+  end
+
+{{/contents}}
+{{/operation}}
+{{/operations}}
+end
