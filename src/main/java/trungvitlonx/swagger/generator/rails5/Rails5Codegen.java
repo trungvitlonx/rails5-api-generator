@@ -1,20 +1,15 @@
 package trungvitlonx.swagger.generator.rails5;
 
-import io.swagger.codegen.v3.CodegenConstants;
-import io.swagger.codegen.v3.CodegenContent;
-import io.swagger.codegen.v3.CodegenOperation;
-import io.swagger.codegen.v3.CodegenParameter;
-import io.swagger.codegen.v3.CodegenResponse;
-import io.swagger.codegen.v3.CodegenType;
+import io.swagger.codegen.v3.*;
 import io.swagger.codegen.v3.generators.DefaultCodegenConfig;
 import io.swagger.codegen.v3.generators.OperationParameters;
+import io.swagger.codegen.v3.generators.util.OpenAPIUtil;
 import io.swagger.v3.core.util.Yaml;
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.Operation;
-import io.swagger.v3.oas.models.PathItem;
-import io.swagger.v3.oas.models.Paths;
 
 import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.parameters.Parameter;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,25 +18,18 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
+import com.github.jknack.handlebars.Handlebars;
+import com.github.jknack.handlebars.helper.ConditionalHelpers;
 
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Rails5Codegen extends DefaultCodegenConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(Rails5Codegen.class);
 
-    protected String appFolder = "";
+    protected String appFolder = "app";
     protected String configFolder = "config";
 
     protected String controllerFolder = "controllers";
@@ -51,6 +39,7 @@ public class Rails5Codegen extends DefaultCodegenConfig {
 
         outputFolder = File.separator + "generated-code" + File.separator + "rails5";
         apiTemplateFiles.put("controller.mustache", "_controller.rb");
+
         typeMapping.clear();
         languageSpecificPrimitives.clear();
         setReservedWordsLowerCase(
@@ -76,6 +65,7 @@ public class Rails5Codegen extends DefaultCodegenConfig {
         typeMapping.put("binary", "String");
         typeMapping.put("ByteArray", "String");
         typeMapping.put("UUID", "String");
+        typeMapping.put("array", "Array");
 
         cliOptions.clear();
     }
@@ -103,10 +93,10 @@ public class Rails5Codegen extends DefaultCodegenConfig {
     @Override
     public String toApiName(String name) {
         if (name.isEmpty()) {
-            return "ApiController";
+            return "Default";
         }
 
-        return camelize(name) + "Controller";
+        return camelize(name);
     }
 
     @Override
@@ -135,13 +125,14 @@ public class Rails5Codegen extends DefaultCodegenConfig {
 
     @Override
     public String toDefaultValue(Schema p) {
-        return "null";
+        return "nil";
     }
 
     @Override
     public String toVarName(String name) {
         // replace - with _ e.g. created-at => created_at
-        // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
+        // FIXME: a parameter should not be assigned. Also declare the methods
+        // parameters as 'final'.
         name = name.replaceAll("-", "_");
 
         // if it's all upper case, convert to lower case
@@ -186,6 +177,10 @@ public class Rails5Codegen extends DefaultCodegenConfig {
 
         @SuppressWarnings("unchecked")
         List<CodegenOperation> operations = (List<CodegenOperation>) objectMap.get("operation");
+
+        Map<String, Schema> schemas = this.openAPI.getComponents().getSchemas();
+        Set<String> imports = new HashSet<>();
+
         for (CodegenOperation operation : operations) {
             operation.httpMethod = operation.httpMethod.toLowerCase();
 
@@ -193,7 +188,38 @@ public class Rails5Codegen extends DefaultCodegenConfig {
             if (params != null && params.isEmpty()) {
                 operation.allParams = null;
             }
+
+            CodegenParameter bodyParam = operation.getBodyParam();
+
+            if (bodyParam != null) {
+                CodegenParameter codegenParameter = CodegenModelFactory.newInstance(CodegenModelType.PARAMETER);
+                Schema schema = schemas.get(bodyParam.dataType);
+
+                if (schema != null) {
+                    Map<String, Schema> properties = schema.getProperties();
+
+                    for (String key : properties.keySet()) {
+                        Schema property = properties.get(key);
+
+                        if (property.get$ref() != null && StringUtils.isNotBlank(property.get$ref())) {
+                            String schemaName = OpenAPIUtil.getSimpleRef(property.get$ref());
+                            Schema subSchema = schemas.get(schemaName);
+                        } else {
+                            boolean required = false;
+                            if (schema.getRequired() != null && !schema.getRequired().isEmpty()) {
+                                required = schema.getRequired().contains(key);
+                            }
+
+                            Parameter parameter = new Parameter().name(key).required(required).schema(property);
+                            codegenParameter = super.fromParameter(parameter, imports);
+                            operation.allParams.add(codegenParameter);
+                        }
+                    }
+                }
+            }
+
             List<CodegenResponse> responses = operation.responses;
+
             if (responses != null) {
                 for (CodegenResponse resp : responses) {
                     if ("0".equals(resp.code)) {
@@ -201,6 +227,7 @@ public class Rails5Codegen extends DefaultCodegenConfig {
                     }
                 }
             }
+
             if (operation.examples != null && !operation.examples.isEmpty()) {
                 // Leave application/json* items only
                 for (Iterator<Map<String, String>> it = operation.examples.iterator(); it.hasNext(); ) {
@@ -212,82 +239,15 @@ public class Rails5Codegen extends DefaultCodegenConfig {
                 }
             }
         }
+
         return objs;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<Map<String, Object>> getOperations(Map<String, Object> objs) {
-        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        Map<String, Object> apiInfo = (Map<String, Object>) objs.get("apiInfo");
-        List<Map<String, Object>> apis = (List<Map<String, Object>>) apiInfo.get("apis");
-        for (Map<String, Object> api : apis) {
-            result.add((Map<String, Object>) api.get("operations"));
-        }
-        return result;
-    }
-
-    private static List<Map<String, Object>> sortOperationsByPath(List<CodegenOperation> ops) {
-        Multimap<String, CodegenOperation> opsByPath = ArrayListMultimap.create();
-
-        for (CodegenOperation op : ops) {
-            opsByPath.put(op.path, op);
-        }
-
-        List<Map<String, Object>> opsByPathList = new ArrayList<Map<String, Object>>();
-        for (Map.Entry<String, Collection<CodegenOperation>> entry : opsByPath.asMap().entrySet()) {
-            Map<String, Object> opsByPathEntry = new HashMap<String, Object>();
-            opsByPathList.add(opsByPathEntry);
-            opsByPathEntry.put("path", entry.getKey());
-            opsByPathEntry.put("operation", entry.getValue());
-            List<CodegenOperation> operationsForThisPath = Lists.newArrayList(entry.getValue());
-            operationsForThisPath.get(operationsForThisPath.size() - 1).getVendorExtensions()
-                .put(CodegenConstants.HAS_MORE_EXT_NAME, Boolean.FALSE);
-            if (opsByPathList.size() < opsByPath.asMap().size()) {
-                opsByPathEntry.put("hasMore", "true");
-            }
-        }
-
-        return opsByPathList;
     }
 
     @Override
     public void processOpts() {
         super.processOpts();
-    }
 
-    @Override
-    public void preprocessOpenAPI(OpenAPI openAPI) {
-        this.openAPI = openAPI;
-
-        // need vendor extensions for x-swagger-router-controller
-        Paths paths = openAPI.getPaths();
-
-        if (paths != null) {
-            for (String pathname : paths.keySet()) {
-                PathItem path = paths.get(pathname);
-                Map<PathItem.HttpMethod, Operation> operationMap = path.readOperationsMap();
-                if (operationMap != null) {
-                    for (PathItem.HttpMethod method : operationMap.keySet()) {
-                        Operation operation = operationMap.get(method);
-                        String tag = "default";
-                        if (operation.getTags() != null && !operation.getTags().isEmpty()) {
-                            tag = toApiName(operation.getTags().get(0));
-                        }
-                        if (operation.getOperationId() == null) {
-                            operation.setOperationId(getOrGenerateOperationId(operation, pathname, method.toString()));
-                        }
-
-                        if (operation.getExtensions() == null) {
-                            operation.setExtensions(new HashMap<>());
-                        }
-                        if (operation.getExtensions() != null
-                            && operation.getExtensions().get("x-swagger-router-controller") == null) {
-                            operation.getExtensions().put("x-swagger-router-controller", sanitizeTag(tag));
-                        }
-                    }
-                }
-            }
-        }
+        supportingFiles.add(new SupportingFile("routes.mustache", configFolder, "api_routes.rb"));
     }
 
     @Override
@@ -310,17 +270,8 @@ public class Rails5Codegen extends DefaultCodegenConfig {
             }
         }
 
-        for (Map<String, Object> operations : getOperations(objs)) {
-            @SuppressWarnings("unchecked")
-            List<CodegenOperation> ops = (List<CodegenOperation>) operations.get("operation");
-
-            List<Map<String, Object>> opsByPathList = sortOperationsByPath(ops);
-            operations.put("operationsByPath", opsByPathList);
-        }
-
         return super.postProcessSupportingFileData(objs);
     }
-
 
     @Override
     public String escapeUnsafeCharacters(String input) {
@@ -333,29 +284,9 @@ public class Rails5Codegen extends DefaultCodegenConfig {
         return input.replace("\"", "");
     }
 
-    protected void configuresParameterForMediaType(CodegenOperation codegenOperation,
-                                                   List<CodegenContent> codegenContents) {
-        if (codegenContents.isEmpty()) {
-            CodegenContent content = new CodegenContent();
-            content.getParameters().addAll(codegenOperation.allParams);
-            codegenContents.add(content);
-
-            codegenOperation.getContents().add(content);
-            return;
-        }
-
-        for (CodegenContent content : codegenContents) {
-            addParameters(content, codegenOperation.bodyParams);
-            addParameters(content, codegenOperation.queryParams);
-            addParameters(content, codegenOperation.pathParams);
-            addParameters(content, codegenOperation.headerParams);
-            addParameters(content, codegenOperation.cookieParams);
-        }
-
-        for (CodegenContent content : codegenContents) {
-            OperationParameters.addHasMore(content.getParameters());
-        }
-
-        codegenOperation.getContents().addAll(codegenContents);
+    @Override
+    public void addHandlebarHelpers(Handlebars handlebars) {
+        super.addHandlebarHelpers(handlebars);
+        handlebars.registerHelpers(ConditionalHelpers.class);
     }
 }
