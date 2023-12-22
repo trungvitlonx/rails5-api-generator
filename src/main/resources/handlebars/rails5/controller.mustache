@@ -3,36 +3,48 @@
 class {{classname}}Controller < ApplicationController
 {{#operations}}
 {{#operation}}
-  def {{nickname}}
-    {{#allParams}}
-    {{^isBodyParam}}
-    {{#if items}}
-    param! :{{paramName}}, Array, required: {{required}} do |item|
-      {{#items}}
-      item.param! :{{name}}, {{datatype}}, required: {{required}}{{#if minimum}}, min: {{minimum}}{{/if}}{{#if maximum}}, max: {{maximum}}{{/if}}{{#if minLength}}, min_length: {{minLength}}{{/if}}{{#if maxLength}}, max_length: {{maxLength}}{{/if}}{{#if enumName}}, in: [{{#allowableValues}}{{#enumVars}}{{{value}}}{{^@last}}, {{/@last}}{{/enumVars}}{{/allowableValues}}]{{/if}}{{#if defaultValue}}, default: {{defaultValue}}{{/if}}
-      {{/items}}
-    end
-    {{/if}}
-    {{^items}}
-    param! :{{paramName}}, {{dataType}}, required: {{required}}{{#if minimum}}, min: {{minimum}}{{/if}}{{#if maximum}}, max: {{maximum}}{{/if}}{{#if minLength}}, min_length: {{minLength}}{{/if}}{{#if maxLength}}, max_length: {{maxLength}}{{/if}}{{#if enumName}}, in: [{{#allowableValues}}{{#enumVars}}{{{value}}}{{^@last}}, {{/@last}}{{/enumVars}}{{/allowableValues}}]{{/if}}{{#if defaultValue}}, default: {{defaultValue}}{{/if}}
-    {{/items}}
-    {{/isBodyParam}}{{#@last}}
-
-    {{/@last}}
-    {{/allParams}}
-    serv = {{classname}}Service.new
-    resp = serv.{{nickname}}(permitted_params)
-    render json: resp
+{{#getIsRestfulIndex}}
+  def index
+    {{>_params_validation this}}
+    # Your code here
   end
-{{^@last}}
 
-{{/@last}}
+{{/getIsRestfulIndex}}
+{{#getIsRestfulShow}}
+  def show
+    {{>_params_validation this}}
+    # Your code here
+  end
+
+{{/getIsRestfulShow}}
+{{#getIsRestfulCreate}}
+  def create
+    {{>_params_validation this}}
+    # Your code here
+  end
+
+{{/getIsRestfulCreate}}
+{{#getIsRestfulUpdate}}
+  def update
+    {{>_params_validation this}}
+    # Your code here
+  end
+
+{{/getIsRestfulUpdate}}
+{{#getIsRestfulDestroy}}
+  def destroy
+    {{>_params_validation this}}
+    # Your code here
+  end
+
+{{/getIsRestfulDestroy}}
+{{^getIsRestful}}
+  def {{nickname}}
+    {{>_params_validation this}}
+    # Your code here
+  end
+
+{{/getIsRestful}}
 {{/operation}}
 {{/operations}}
-
-  private
-
-  def permitted_params
-    params.permit
-  end
 end

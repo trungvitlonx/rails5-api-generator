@@ -2,11 +2,10 @@ package trungvitlonx.swagger.generator.rails5;
 
 import io.swagger.codegen.v3.*;
 import io.swagger.codegen.v3.generators.DefaultCodegenConfig;
-import io.swagger.codegen.v3.generators.OperationParameters;
 import io.swagger.codegen.v3.generators.util.OpenAPIUtil;
 import io.swagger.v3.core.util.Yaml;
 import io.swagger.v3.oas.models.OpenAPI;
-
+import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.parameters.Parameter;
 import org.apache.commons.lang3.StringUtils;
@@ -37,18 +36,18 @@ public class Rails5Codegen extends DefaultCodegenConfig {
     public Rails5Codegen() {
         super();
 
-        outputFolder = File.separator + "generated-code" + File.separator + "rails5";
+        outputFolder = "";
         apiTemplateFiles.put("controller.mustache", "_controller.rb");
 
         typeMapping.clear();
         languageSpecificPrimitives.clear();
         setReservedWordsLowerCase(
-            Arrays.asList(
-                "__FILE__", "and", "def", "end", "in", "or", "self", "unless", "__LINE__",
-                "begin", "defined?", "ensure", "module", "redo", "super", "until", "BEGIN",
-                "break", "do", "false", "next", "rescue", "then", "when", "END", "case",
-                "else", "for", "nil", "retry", "true", "while", "alias", "class", "elsif",
-                "if", "not", "return", "undef", "yield"));
+                Arrays.asList(
+                        "__FILE__", "and", "def", "end", "in", "or", "self", "unless", "__LINE__",
+                        "begin", "defined?", "ensure", "module", "redo", "super", "until", "BEGIN",
+                        "break", "do", "false", "next", "rescue", "then", "when", "END", "case",
+                        "else", "for", "nil", "retry", "true", "while", "alias", "class", "elsif",
+                        "if", "not", "return", "undef", "yield"));
 
         typeMapping.put("string", "String");
         typeMapping.put("char", "String");
@@ -204,6 +203,11 @@ public class Rails5Codegen extends DefaultCodegenConfig {
                         if (property.get$ref() != null && StringUtils.isNotBlank(property.get$ref())) {
                             String schemaName = OpenAPIUtil.getSimpleRef(property.get$ref());
                             Schema subSchema = schemas.get(schemaName);
+                            if (subSchema instanceof ObjectSchema) {
+                                // TODO handle sub-schema
+                            }
+                        } else if (property instanceof ObjectSchema) {
+                            property.getName();
                         } else {
                             boolean required = false;
                             if (schema.getRequired() != null && !schema.getRequired().isEmpty()) {
@@ -230,7 +234,7 @@ public class Rails5Codegen extends DefaultCodegenConfig {
 
             if (operation.examples != null && !operation.examples.isEmpty()) {
                 // Leave application/json* items only
-                for (Iterator<Map<String, String>> it = operation.examples.iterator(); it.hasNext(); ) {
+                for (Iterator<Map<String, String>> it = operation.examples.iterator(); it.hasNext();) {
                     final Map<String, String> example = it.next();
                     final String contentType = example.get("contentType");
                     if (contentType == null || !contentType.startsWith("application/json")) {
@@ -247,7 +251,8 @@ public class Rails5Codegen extends DefaultCodegenConfig {
     public void processOpts() {
         super.processOpts();
 
-        supportingFiles.add(new SupportingFile("routes.mustache", configFolder, "api_routes.rb"));
+        supportingFiles
+                .add(new SupportingFile("routes.mustache", configFolder, "routes.rb"));
     }
 
     @Override
@@ -260,7 +265,7 @@ public class Rails5Codegen extends DefaultCodegenConfig {
                 module.addSerializer(Double.class, new JsonSerializer<Double>() {
                     @Override
                     public void serialize(Double val, JsonGenerator jgen,
-                                          SerializerProvider provider) throws IOException, JsonProcessingException {
+                            SerializerProvider provider) throws IOException, JsonProcessingException {
                         jgen.writeNumber(new BigDecimal(val));
                     }
                 });

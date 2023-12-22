@@ -1,0 +1,23 @@
+{{#allParams}}
+{{^getIsBodyParam}}
+{{#if items}}
+{{#eq baseType "String"}}
+param! :{{paramName}}, Array, required: {{required}} do |item, index|
+  {{#items}}
+  item.param! index, {{datatype}}, required: {{required}}{{#if minimum}}, min: {{minimum}}{{/if}}{{#if maximum}}, max: {{maximum}}{{/if}}{{#if minLength}}, min_length: {{minLength}}{{/if}}{{#if maxLength}}, max_length: {{maxLength}}{{/if}}{{#if enumName}}, in: [{{#allowableValues}}{{#enumVars}}{{{value}}}{{^@last}}, {{/@last}}{{/enumVars}}{{/allowableValues}}]{{/if}}{{#if defaultValue}}, default: {{defaultValue}}{{/if}}
+  {{/items}}
+end
+{{/eq}}
+{{#eq baseType "Integer"}}
+param! :{{paramName}}, Array, required: {{required}} do |item, index|
+  {{#items}}
+  item.param! index, {{datatype}}, required: {{required}}{{#if minimum}}, min: {{minimum}}{{/if}}{{#if maximum}}, max: {{maximum}}{{/if}}{{#if minLength}}, min_length: {{minLength}}{{/if}}{{#if maxLength}}, max_length: {{maxLength}}{{/if}}{{#if enumName}}, in: [{{#allowableValues}}{{#enumVars}}{{{value}}}{{^@last}}, {{/@last}}{{/enumVars}}{{/allowableValues}}]{{/if}}{{#if defaultValue}}, default: {{defaultValue}}{{/if}}
+  {{/items}}
+end
+{{/eq}}
+{{/if}}
+{{^items}}
+param! :{{paramName}}, {{dataType}}, required: {{required}}{{#if minimum}}, min: {{minimum}}{{/if}}{{#if maximum}}, max: {{maximum}}{{/if}}{{#if minLength}}, min_length: {{minLength}}{{/if}}{{#if maxLength}}, max_length: {{maxLength}}{{/if}}{{#if enumName}}, in: [{{#allowableValues}}{{#enumVars}}{{{value}}}{{^@last}}, {{/@last}}{{/enumVars}}{{/allowableValues}}]{{/if}}{{#if defaultValue}}, default: {{defaultValue}}{{/if}}
+{{/items}}
+{{/getIsBodyParam}}
+{{/allParams}}
