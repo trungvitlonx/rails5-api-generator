@@ -100,7 +100,7 @@ public class Rails5Codegen extends DefaultCodegenConfig {
 
     @Override
     public String apiPackage() {
-        return this.appFolder + File.separator + this.controllerFolder;
+        return this.appFolder + File.separator + this.controllerFolder + File.separator + "api" + File.separator + "v1";
     }
 
     @Override
